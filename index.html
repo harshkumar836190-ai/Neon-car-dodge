@@ -31,6 +31,8 @@
       font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       color: #ffffff;
       touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
       overscroll-behavior: none;
     }
 
@@ -44,6 +46,8 @@
       background: var(--bg-dark);
       position: relative;
       box-shadow: 0 0 40px rgba(0, 243, 255, 0.12);
+      touch-action: none;
+      overscroll-behavior: none;
     }
 
     #game-stage {
@@ -52,13 +56,18 @@
       width: 100%;
       overflow: hidden;
       background: var(--bg-dark);
+      touch-action: none;
+      overscroll-behavior: none;
     }
 
-    canvas#gameCanvas {
+    canvas, canvas#gameCanvas {
       display: block;
       width: 100%;
       height: 100%;
       touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      overscroll-behavior: none;
       will-change: transform;
     }
 
@@ -443,7 +452,7 @@
         <button id="start-btn" class="btn btn-primary btn-pulse">TAP TO RACE</button>
 
         <div class="controls-hint">
-          <strong>Slide Finger Left / Right</strong> to switch lanes.<br>
+          <strong>Swipe Left / Right</strong> or <strong>Tap Left / Right</strong> to switch lanes.<br>
           Collect coins &amp; blue shield orbs. Dodge traffic!
         </div>
       </div>
@@ -1070,7 +1079,7 @@
       }
 
       // ==========================================
-      // FINGER SLIDE CONTROLS ONLY (SENSITIVE & SMOOTH)
+      // ANDROID WEBVIEW-SAFE SWIPE + TAP CONTROLS
       // ==========================================
       function movePlayerLane(dir) {
         if (gameState !== 'PLAYING') return;
@@ -1086,73 +1095,81 @@
         }
       }
 
-      let slideOriginX = 0;
-      let slideOriginY = 0;
-      let lastSlideDir = 0;
-      let isMouseDragging = false;
+      let touchStartX = 0;
+      let touchStartY = 0;
+      let swipeLocked = false;
 
-      function handleSlideMove(clientX, clientY) {
-        if (gameState !== 'PLAYING') return;
-        const dx = clientX - slideOriginX;
-        const dy = clientY - slideOriginY;
-
-        const dir = dx < 0 ? -1 : 1;
-        // Sensitive finger slide: 16px for first/reverse move, ~50px for continuous 2nd lane
-        const threshold = (lastSlideDir === 0 || lastSlideDir !== dir)
-          ? 16
-          : Math.max(48, laneW * 0.48);
-
-        if (Math.abs(dx) >= threshold && Math.abs(dx) > Math.abs(dy) * 0.65) {
-          movePlayerLane(dir);
-          slideOriginX = clientX;
-          slideOriginY = clientY;
-          lastSlideDir = dir;
-        }
-      }
+      let mouseStartX = 0;
+      let isMouseDown = false;
+      let mouseSwipeLocked = false;
 
       canvas.addEventListener('touchstart', (e) => {
         e.preventDefault();
         sound.ensureContext();
         if (e.touches.length === 0) return;
-        slideOriginX = e.touches[0].clientX;
-        slideOriginY = e.touches[0].clientY;
-        lastSlideDir = 0;
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        swipeLocked = false;
       }, { passive: false });
 
       canvas.addEventListener('touchmove', (e) => {
         e.preventDefault();
-        if (e.touches.length === 0) return;
-        handleSlideMove(e.touches[0].clientX, e.touches[0].clientY);
+        if (gameState !== 'PLAYING' || swipeLocked || e.touches.length === 0) return;
+
+        const diffX = e.touches[0].clientX - touchStartX;
+        if (Math.abs(diffX) > 25) {
+          movePlayerLane(diffX < 0 ? -1 : 1);
+          swipeLocked = true; // Lock so one swipe moves exactly one lane
+        }
       }, { passive: false });
 
       canvas.addEventListener('touchend', (e) => {
         e.preventDefault();
-        lastSlideDir = 0;
+        if (gameState !== 'PLAYING') return;
+
+        // If it wasn't a swipe, handle clean left-half / right-half tap
+        if (!swipeLocked) {
+          const rect = canvas.getBoundingClientRect();
+          const relX = touchStartX - rect.left;
+          movePlayerLane(relX < rect.width * 0.5 ? -1 : 1);
+        }
+        swipeLocked = false;
       }, { passive: false });
 
-      canvas.addEventListener('touchcancel', () => {
-        lastSlideDir = 0;
-      }, { passive: true });
+      canvas.addEventListener('touchcancel', (e) => {
+        e.preventDefault();
+        swipeLocked = false;
+      }, { passive: false });
 
-      // Desktop Mouse Drag Slide
+      // Desktop Mouse Swipe + Left/Right Click Support
       canvas.addEventListener('mousedown', (e) => {
         sound.ensureContext();
-        isMouseDragging = true;
-        slideOriginX = e.clientX;
-        slideOriginY = e.clientY;
-        lastSlideDir = 0;
+        isMouseDown = true;
+        mouseStartX = e.clientX;
+        mouseSwipeLocked = false;
       });
 
       window.addEventListener('mousemove', (e) => {
-        if (!isMouseDragging) return;
-        handleSlideMove(e.clientX, e.clientY);
+        if (!isMouseDown || mouseSwipeLocked || gameState !== 'PLAYING') return;
+        const diffX = e.clientX - mouseStartX;
+        if (Math.abs(diffX) > 25) {
+          movePlayerLane(diffX < 0 ? -1 : 1);
+          mouseSwipeLocked = true;
+        }
       });
 
-      window.addEventListener('mouseup', () => {
-        isMouseDragging = false;
-        lastSlideDir = 0;
+      window.addEventListener('mouseup', (e) => {
+        if (!isMouseDown) return;
+        if (!mouseSwipeLocked && gameState === 'PLAYING') {
+          const rect = canvas.getBoundingClientRect();
+          const relX = e.clientX - rect.left;
+          movePlayerLane(relX < rect.width * 0.5 ? -1 : 1);
+        }
+        isMouseDown = false;
+        mouseSwipeLocked = false;
       });
 
+      // Desktop Keyboard Testing
       window.addEventListener('keydown', (e) => {
         if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
           e.preventDefault();
