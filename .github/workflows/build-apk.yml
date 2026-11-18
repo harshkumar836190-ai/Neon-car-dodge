@@ -25,11 +25,16 @@ jobs:
 
       - name: Install Capacitor & Build Android Project
         run: |
-          mkdir -p www
+          mkdir -p www assets
           cp index.html www/index.html
+          cp *.png assets/icon-only.png
+          cp *.png assets/icon-foreground.png
+          cp *.png assets/icon-background.png
           npm install
+          npm install -D @capacitor/assets
           npx cap init "Neon Rush Car Dodge" "com.madxharsh.neonrushcardodge" --web-dir www
           npx cap add android
+          npx capacitor-assets generate --android
           sed -i 's/android:usesCleartextTraffic="true"/android:usesCleartextTraffic="true" android:hardwareAccelerated="true"/g' android/app/src/main/AndroidManifest.xml || true
           cd android
           chmod +x gradlew
@@ -40,4 +45,3 @@ jobs:
         with:
           name: Neon-Rush-Car-Dodge-Clean-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
-          
