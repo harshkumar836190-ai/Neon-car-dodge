@@ -23,13 +23,13 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Layer 1 - Code Obfuscation & Minification
+      - name: Layer 1 - Minify & Protect HTML/JS Code
         run: |
           mkdir -p www assets
           npm install -g html-minifier-terser
           html-minifier-terser --collapse-whitespace --remove-comments --minify-js true --minify-css true index.html -o www/index.html
 
-      - name: Layer 2 & 3 - Build Capacitor Android with R8 Hardening
+      - name: Layer 2 & 3 - Build Capacitor Android Project
         run: |
           cp *.png assets/icon-only.png
           cp *.png assets/icon-foreground.png
@@ -39,8 +39,6 @@ jobs:
           npx cap init "Neon Rush Car Dodge" "com.madxharsh.neonrushcardodge" --web-dir www
           npx cap add android
           npx capacitor-assets generate --android
-          sed -i 's/minifyEnabled false/minifyEnabled true/g' android/app/build.gradle
-          sed -i 's/<application/<application android:allowBackup="false" android:debuggable="false"/g' android/app/src/main/AndroidManifest.xml
 
       - name: Layer 4 - Generate Keystore & Build Signed Release APK
         run: |
@@ -48,16 +46,16 @@ jobs:
           keytool -genkey -v -keystore release-key.keystore -alias neonrush -keyalg RSA -keysize 2048 -validity 10000 -storepass Harsh@2026Secure -keypass Harsh@2026Secure -dname "CN=MadxHarsh, OU=Gaming, O=MadxHarshStudios, L=Ladwa, S=Haryana, C=IN"
           cd ..
           chmod +x gradlew
-          ./gradlew assembleRelease
-          UNSIGNED_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
-          BUILD_TOOLS=$(find $ANDROID_HOME/build-tools -maxdepth 1 | sort -V | tail -n 1)
-          $BUILD_TOOLS/zipalign -v -p 4 "$UNSIGNED_APK" app/build/outputs/apk/release/aligned.apk
-          $BUILD_TOOLS/apksigner sign --ks app/release-key.keystore --ks-pass pass:Harsh@2026Secure --key-pass pass:Harsh@2026Secure --out app/build/outputs/apk/release/Neon-Rush-Car-Dodge-Signed-Release.apk app/build/outputs/apk/release/aligned.apk
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file=$(pwd)/app/release-key.keystore \
+            -Pandroid.injected.signing.store.password=Harsh@2026Secure \
+            -Pandroid.injected.signing.key.alias=neonrush \
+            -Pandroid.injected.signing.key.password=Harsh@2026Secure
 
       - name: Upload 4-Layer Secure Signed APK & Keystore
         uses: actions/upload-artifact@v4
         with:
           name: Neon-Rush-Secure-Signed-Release
           path: |
-            android/app/build/outputs/apk/release/Neon-Rush-Car-Dodge-Signed-Release.apk
+            android/app/build/outputs/apk/release/*.apk
             android/app/release-key.keystore
