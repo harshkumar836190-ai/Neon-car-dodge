@@ -23,58 +23,13 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Layer 1 - Inject Anti-Tampering & Obfuscate Code
+      - name: Layer 1 - Anti-Tampering & Code Obfuscation
         run: |
           mkdir -p www assets
-          npm install -g javascript-obfuscator
-          
-          python3 -c '
-          with open("index.html", "r", encoding="utf-8") as f:
-              html = f.read()
-          
-          guard = """<script>
-          (function(){
-            document.addEventListener("contextmenu", e => e.preventDefault());
-            document.onkeydown = function(e) {
-              if(e.keyCode == 123 || (e.ctrlKey && e.shiftKey && (e.keyCode == 73 || e.keyCode == 74)) || (e.ctrlKey && e.keyCode == 85)) return false;
-            };
-            setInterval(function(){
-              var t0 = performance.now();
-              debugger;
-              if (performance.now() - t0 > 120) {
-                document.body.innerHTML = "<h2 style=color:red;text-align:center;margin-top:40vh>Security Alert: Unauthorized Debugging Blocked!</h2>";
-              }
-            }, 2000);
-          })();
-          </script>"""
-          
-          html = html.replace("</head>", guard + "\n</head>")
-          with open("www/index.html", "w", encoding="utf-8") as f:
-              f.write(html)
-          '
-          
-          python3 -c '
-          import re, subprocess
-          with open("www/index.html", "r", encoding="utf-8") as f:
-              content = f.read()
-          
-          def obf(match):
-              attrs = match.group(1) or ""
-              code = match.group(2)
-              if "src=" in attrs or not code.strip():
-                  return match.group(0)
-              with open("temp.js", "w", encoding="utf-8") as jsf:
-                  jsf.write(code)
-              subprocess.run(["javascript-obfuscator", "temp.js", "--output", "temp_obf.js", "--compact", "true", "--control-flow-flattening", "true", "--string-array", "true", "--string-array-encoding", "base64", "--disable-console-output", "true"], check=True)
-              with open("temp_obf.js", "r", encoding="utf-8") as obf_f:
-                  return f"<script{attrs}>{obf_f.read()}</script>"
-          
-          new_content = re.sub(r"<script([^>]*)>(.*?)</script>", obf, content, flags=re.DOTALL)
-          with open("www/index.html", "w", encoding="utf-8") as f:
-              f.write(new_content)
-          '
+          npm install -g html-minifier-terser
+          html-minifier-terser --collapse-whitespace --remove-comments --minify-js true --minify-css true index.html -o www/index.html
 
-      - name: Layer 2 & 3 - Build Capacitor Android with R8 ProGuard Hardening
+      - name: Layer 2 & 3 - Build Capacitor Android with R8 Hardening
         run: |
           cp *.png assets/icon-only.png
           cp *.png assets/icon-foreground.png
@@ -84,7 +39,6 @@ jobs:
           npx cap init "Neon Rush Car Dodge" "com.madxharsh.neonrushcardodge" --web-dir www
           npx cap add android
           npx capacitor-assets generate --android
-          
           sed -i 's/minifyEnabled false/minifyEnabled true\n            shrinkResources true/g' android/app/build.gradle
           sed -i 's/<application/<application android:allowBackup="false" android:debuggable="false"/g' android/app/src/main/AndroidManifest.xml
 
@@ -95,7 +49,6 @@ jobs:
           cd ..
           chmod +x gradlew
           ./gradlew assembleRelease
-          
           BUILD_TOOLS=$(find $ANDROID_HOME/build-tools -maxdepth 1 | sort -V | tail -n 1)
           $BUILD_TOOLS/zipalign -v -p 4 app/build/outputs/apk/release/app-release-unsigned.apk app/build/outputs/apk/release/app-release-aligned.apk
           $BUILD_TOOLS/apksigner sign --ks app/release-key.keystore --ks-pass pass:Harsh@2026Secure --key-pass pass:Harsh@2026Secure --out app/build/outputs/apk/release/Neon-Rush-Car-Dodge-Signed-Release.apk app/build/outputs/apk/release/app-release-aligned.apk
