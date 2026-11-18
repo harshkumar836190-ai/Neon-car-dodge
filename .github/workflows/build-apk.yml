@@ -23,11 +23,30 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Layer 1 - Minify & Protect HTML/JS Code
+      - name: Layer 1 - Hard Obfuscate JavaScript & Minify HTML
         run: |
           mkdir -p www assets
+          npm install javascript-obfuscator
           npm install -g html-minifier-terser
-          html-minifier-terser --collapse-whitespace --remove-comments --minify-js true --minify-css true index.html -o www/index.html
+          node -e '
+            const fs = require("fs");
+            const JavaScriptObfuscator = require("javascript-obfuscator");
+            let html = fs.readFileSync("index.html", "utf8");
+            html = html.replace(/<script([^>]*)>([\s\S]*?)<\/script>/gi, (match, attrs, code) => {
+              if (attrs.includes("src=") || !code.trim()) return match;
+              const obf = JavaScriptObfuscator.obfuscate(code, {
+                compact: true,
+                controlFlowFlattening: true,
+                stringArray: true,
+                stringArrayEncoding: ["base64"],
+                disableConsoleOutput: true
+              }).getObfuscatedCode();
+              return `<script${attrs}>${obf}</script>`;
+            });
+            fs.writeFileSync("www/temp.html", html);
+          '
+          html-minifier-terser --collapse-whitespace --remove-comments --minify-css true www/temp.html -o www/index.html
+          rm www/temp.html
 
       - name: Layer 2 & 3 - Build Capacitor Android Project
         run: |
@@ -59,3 +78,4 @@ jobs:
           path: |
             android/app/build/outputs/apk/release/*.apk
             android/app/release-key.keystore
+          
