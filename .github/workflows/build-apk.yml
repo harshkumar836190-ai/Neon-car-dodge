@@ -1,4 +1,4 @@
-name: Build 4-Layer Secure Signed Release APK
+name: Build Self-Defending Ultimate Secure APK
 
 on:
   workflow_dispatch:
@@ -23,7 +23,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Layer 1 - Hard Obfuscate JavaScript & Minify HTML
+      - name: Ultimate Security - Inject Self-Defending Guards & Heavy Obfuscation
         run: |
           mkdir -p www assets
           npm install javascript-obfuscator
@@ -32,13 +32,35 @@ jobs:
             const fs = require("fs");
             const JavaScriptObfuscator = require("javascript-obfuscator");
             let html = fs.readFileSync("index.html", "utf8");
+            
+            const securityGuard = `
+              (function(){
+                const validHosts = ["localhost", "127.0.0.1", "harshkumar836190-ai.github.io", ""];
+                if (!validHosts.includes(window.location.hostname)) {
+                  document.documentElement.innerHTML = "<body style=background:#000;color:red;text-align:center;padding-top:40vh;font-family:sans-serif><h1>SECURITY VIOLATION</h1><p>Unauthorized Copy Blocked.</p></body>";
+                  throw new Error("Tamper Detected");
+                }
+                setInterval(() => {
+                  const scripts = Array.from(document.getElementsByTagName("script")).map(s => s.src || s.innerHTML).join(" ");
+                  if (!scripts.includes("highperformanceformat") && !scripts.includes("effectivegatecpm") && !scripts.includes("adsterra") && !scripts.includes("atOptions")) {
+                    document.body.innerHTML = "<div style=background:#000;color:#ff0055;text-align:center;padding-top:40vh;font-family:sans-serif><h2>AD INTEGRITY ERROR</h2><p>Original App Required.</p></div>";
+                  }
+                }, 4000);
+              })();
+            `;
+
             html = html.replace(/<script([^>]*)>([\s\S]*?)<\/script>/gi, (match, attrs, code) => {
               if (attrs.includes("src=") || !code.trim()) return match;
-              const obf = JavaScriptObfuscator.obfuscate(code, {
+              const combinedCode = securityGuard + "\n" + code;
+              const obf = JavaScriptObfuscator.obfuscate(combinedCode, {
                 compact: true,
                 controlFlowFlattening: true,
+                controlFlowFlatteningThreshold: 0.75,
+                deadCodeInjection: true,
+                deadCodeInjectionThreshold: 0.4,
+                selfDefending: true,
                 stringArray: true,
-                stringArrayEncoding: ["base64"],
+                stringArrayEncoding: ["rc4"],
                 disableConsoleOutput: true
               }).getObfuscatedCode();
               return `<script${attrs}>${obf}</script>`;
@@ -48,7 +70,7 @@ jobs:
           html-minifier-terser --collapse-whitespace --remove-comments --minify-css true www/temp.html -o www/index.html
           rm www/temp.html
 
-      - name: Layer 2 & 3 - Build Capacitor Android Project
+      - name: Build Capacitor Android Project
         run: |
           cp *.png assets/icon-only.png
           cp *.png assets/icon-foreground.png
@@ -59,7 +81,7 @@ jobs:
           npx cap add android
           npx capacitor-assets generate --android
 
-      - name: Layer 4 - Generate Keystore & Build Signed Release APK
+      - name: Sign Release APK with Master Keystore
         run: |
           cd android/app
           keytool -genkey -v -keystore release-key.keystore -alias neonrush -keyalg RSA -keysize 2048 -validity 10000 -storepass Harsh@2026Secure -keypass Harsh@2026Secure -dname "CN=MadxHarsh, OU=Gaming, O=MadxHarshStudios, L=Ladwa, S=Haryana, C=IN"
@@ -71,11 +93,11 @@ jobs:
             -Pandroid.injected.signing.key.alias=neonrush \
             -Pandroid.injected.signing.key.password=Harsh@2026Secure
 
-      - name: Upload 4-Layer Secure Signed APK & Keystore
+      - name: Upload Ultimate Secure APK
         uses: actions/upload-artifact@v4
         with:
-          name: Neon-Rush-Secure-Signed-Release
+          name: Neon-Rush-Ultimate-Secure-APK
           path: |
             android/app/build/outputs/apk/release/*.apk
             android/app/release-key.keystore
-          
+            
