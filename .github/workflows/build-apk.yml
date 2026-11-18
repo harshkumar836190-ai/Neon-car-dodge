@@ -23,7 +23,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Layer 1 - Anti-Tampering & Code Obfuscation
+      - name: Layer 1 - Code Obfuscation & Minification
         run: |
           mkdir -p www assets
           npm install -g html-minifier-terser
@@ -39,7 +39,7 @@ jobs:
           npx cap init "Neon Rush Car Dodge" "com.madxharsh.neonrushcardodge" --web-dir www
           npx cap add android
           npx capacitor-assets generate --android
-          sed -i 's/minifyEnabled false/minifyEnabled true\n            shrinkResources true/g' android/app/build.gradle
+          sed -i 's/minifyEnabled false/minifyEnabled true/g' android/app/build.gradle
           sed -i 's/<application/<application android:allowBackup="false" android:debuggable="false"/g' android/app/src/main/AndroidManifest.xml
 
       - name: Layer 4 - Generate Keystore & Build Signed Release APK
@@ -49,9 +49,10 @@ jobs:
           cd ..
           chmod +x gradlew
           ./gradlew assembleRelease
+          UNSIGNED_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
           BUILD_TOOLS=$(find $ANDROID_HOME/build-tools -maxdepth 1 | sort -V | tail -n 1)
-          $BUILD_TOOLS/zipalign -v -p 4 app/build/outputs/apk/release/app-release-unsigned.apk app/build/outputs/apk/release/app-release-aligned.apk
-          $BUILD_TOOLS/apksigner sign --ks app/release-key.keystore --ks-pass pass:Harsh@2026Secure --key-pass pass:Harsh@2026Secure --out app/build/outputs/apk/release/Neon-Rush-Car-Dodge-Signed-Release.apk app/build/outputs/apk/release/app-release-aligned.apk
+          $BUILD_TOOLS/zipalign -v -p 4 "$UNSIGNED_APK" app/build/outputs/apk/release/aligned.apk
+          $BUILD_TOOLS/apksigner sign --ks app/release-key.keystore --ks-pass pass:Harsh@2026Secure --key-pass pass:Harsh@2026Secure --out app/build/outputs/apk/release/Neon-Rush-Car-Dodge-Signed-Release.apk app/build/outputs/apk/release/aligned.apk
 
       - name: Upload 4-Layer Secure Signed APK & Keystore
         uses: actions/upload-artifact@v4
